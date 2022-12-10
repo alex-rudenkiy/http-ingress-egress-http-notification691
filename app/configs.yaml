@@ -1,0 +1,579 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    template: myapp
+    app: ingressgateway-ci01994970-idevgen-synapse-federal
+    app.kubernetes.io/component: gateways
+    app.kubernetes.io/instance: ci01994970-idevgen-synapse-control-panel
+    app.kubernetes.io/name: gateways
+    app.kubernetes.io/part-of: istio
+    chart: gateways
+    heritage: Tiller
+    istio: ingressgateway-ci01994970-idevgen-synapse-federal
+    release: istio
+  name: ingressgateway-ci01994970-idevgen-synapse-federal
+spec:
+  progressDeadlineSeconds: 1200
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: ingressgateway-ci01994970-idevgen-synapse-federal
+      istio: ingressgateway-ci01994970-idevgen-synapse-federal
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: 'false'
+      creationTimestamp: null
+      labels:
+        app: ingressgateway-ci01994970-idevgen-synapse-federal
+        chart: gateways
+        heritage: Tiller
+        istio: ingressgateway-ci01994970-idevgen-synapse-federal
+        release: istio
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - preference:
+                matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+              weight: 2
+            - preference:
+                matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - ppc64le
+              weight: 2
+            - preference:
+                matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - s390x
+              weight: 2
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+                      - ppc64le
+                      - s390x
+      containers:
+        - args:
+            - proxy
+            - router
+            - '--domain'
+            - $(POD_NAMESPACE).svc.cluster.local
+            - '--proxyLogLevel=warning'
+            - '--proxyComponentLogLevel=misc:error'
+            - '--log_output_level=default:info'
+            - '--serviceCluster'
+            - ingressgateway-ci01994970-idevgen-synapse-federal.$(POD_NAMESPACE)
+            - '--trust-domain=cluster.local'
+          env:
+            - name: JWT_POLICY
+              value: first-party-jwt
+            - name: PILOT_CERT_PROVIDER
+              value: istiod
+            - name: CA_ADDR
+              value: 'ist.ci01994970-idevgen-synapse-control-panel.svc:15012'
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INSTANCE_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.hostIP
+            - name: SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.serviceAccountName
+            - name: CANONICAL_SERVICE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: 'metadata.labels[''service.istio.io/canonical-name'']'
+            - name: CANONICAL_REVISION
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: 'metadata.labels[''service.istio.io/canonical-revision'']'
+            - name: ISTIO_META_WORKLOAD_NAME
+              value: ingressgateway-ci01994970-idevgen-synapse-federal
+            - name: ISTIO_META_OWNER
+              value: >-
+                kubernetes://apis/apps/v1/namespaces/ci01994970-idevgen-synapse-federal/deployments/ingressgateway-ci01994970-idevgen-synapse-federal
+            - name: ISTIO_META_MESH_ID
+              value: cluster.local
+            - name: PROXY_CONFIG
+              value: >
+                {"discoveryAddress":"ist.ci01994970-idevgen-synapse-control-panel.svc:15012","tracing":{"zipkin":{"address":"jaeger-collector.ci01994970-idevgen-synapse-control-panel.svc:9411"},"tlsSettings":{"subjectAltNames":[]}},"proxyMetadata":{"DNS_AGENT":""}}
+            - name: ISTIO_META_ROUTER_MODE
+              value: sni-dnat
+            - name: ISTIO_META_CLUSTER_ID
+              value: Kubernetes
+          image: >-
+            registry.redhat.io/openshift-service-mesh/proxyv2-rhel8@sha256:03ba7a4bed6122c842ac0aeca626be7e6f3ec2106acee2ffda017c8cbf36e41b
+          imagePullPolicy: Always
+          name: istio-proxy
+          ports:
+            - containerPort: 15090
+              name: http-envoy-prom
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 30
+            httpGet:
+              path: /healthz/ready
+              port: 15021
+              scheme: HTTP
+            initialDelaySeconds: 1
+            periodSeconds: 2
+            successThreshold: 1
+            timeoutSeconds: 5
+          resources:
+            limits:
+              cpu: 600m
+              memory: 900Mi
+            requests:
+              cpu: 400m
+              memory: 700Mi
+          securityContext:
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+            - mountPath: /etc/istio/proxy
+              name: istio-envoy
+            - mountPath: /var/run/secrets/istio
+              name: istiod-ca-cert
+            - mountPath: /etc/istio/pod
+              name: podinfo
+            - name: ingressgateway-certs
+              mountPath: /etc/istio/ingressgateway-certs
+            - name: ingressgateway-ca-certs
+              mountPath: /etc/istio/ingressgateway-ca-certs
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      imagePullSecrets:
+        - name: default-secret
+      securityContext:
+        runAsUser: 999
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 60
+      volumes:
+        - emptyDir: {}
+          name: istio-envoy
+        - configMap:
+            defaultMode: 420
+            name: istio-ca-root-cert
+          name: istiod-ca-cert
+        - name: ingressgateway-certs
+          secret:
+            secretName: istio-ingressgateway-certs
+            defaultMode: 420
+            optional: true
+        - name: ingressgateway-ca-certs
+          secret:
+            secretName: istio-ingressgateway-ca-certs
+            defaultMode: 420
+            optional: true
+        - downwardAPI:
+            defaultMode: 256
+            items:
+              - fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.labels
+                path: labels
+              - fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.annotations
+                path: annotations
+          name: podinfo
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: ingressgateway-gw
+  labels:
+    template: myapp
+spec:
+  selector:
+    istio: ingressgateway-ci01994970-idevgen-synapse-federal
+  servers:
+    - hosts:
+        - '*'
+      port:
+        name: http-8080
+        number: 8080
+        protocol: HTTP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    template: myapp
+    app: ingressgateway-ci01994970-idevgen-synapse-federal
+    istio: ingressgateway-ci01994970-idevgen-synapse-federal
+  name: ingressgateway-svc
+  annotations:
+    kubernetes.io/elb.class: union
+    kubernetes.io/elb.subnet-id: 65529c62-e797-4e26-9282-86db36eb192e
+    kubernetes.io/elb.enterpriseID: a93d5bed-a526-47df-8bf1-5bd895bd1078
+    kubernetes.io/elb.autocreate: >-
+      {"type":"public","bandwidth_name":"cce-bandwidth-1669984443744","bandwidth_chargemode":"traffic","bandwidth_size":5,"bandwidth_sharetype":"PER","eip_type":"5_bgp"}
+    kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
+    kubernetes.io/elb.health-check-flag: 'on'
+    kubernetes.io/elb.health-check-option: '{"protocol":"TCP","delay":"5","timeout":"10","max_retries":"3"}'
+spec:
+  ports:
+    - name: http-8080
+      targetPort: 8080
+      port: 8080
+      protocol: TCP
+  selector:
+    app: ingressgateway-ci01994970-idevgen-synapse-federal
+    istio: ingressgateway-ci01994970-idevgen-synapse-federal
+  type: LoadBalancer
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: egressgateway-ci01994970-idevgen-synapse-federal
+  labels:
+    template: myapp
+    app: egressgateway-ci01994970-idevgen-synapse-federal
+    app.kubernetes.io/part-of: istio
+    app.kubernetes.io/instance: ci01994970-idevgen-synapse-control-panel
+    release: istio
+    app.kubernetes.io/version: 2.0.1-6.el8-75
+    app.kubernetes.io/component: gateways
+    istio: egressgateway-ci01994970-idevgen-synapse-federal
+    app.kubernetes.io/managed-by: maistra-istio-operator
+    app.kubernetes.io/name: gateways
+    chart: gateways
+    heritage: Tiller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: egressgateway-ci01994970-idevgen-synapse-federal
+      istio: egressgateway-ci01994970-idevgen-synapse-federal
+  template:
+    metadata:
+      namespace: ci01994970-idevgen-synapse-federal
+      creationTimestamp: null
+      labels:
+        app: egressgateway-ci01994970-idevgen-synapse-federal
+        chart: gateways
+        heritage: Tiller
+        istio: egressgateway-ci01994970-idevgen-synapse-federal
+        release: istio
+      annotations:
+        sidecar.istio.io/inject: 'false'
+    spec:
+      restartPolicy: Always
+      serviceAccountName: default
+      schedulerName: default-scheduler
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+                      - ppc64le
+                      - s390x
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 2
+              preference:
+                matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - amd64
+            - weight: 2
+              preference:
+                matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - ppc64le
+            - weight: 2
+              preference:
+                matchExpressions:
+                  - key: beta.kubernetes.io/arch
+                    operator: In
+                    values:
+                      - s390x
+      terminationGracePeriodSeconds: 60
+      securityContext: {}
+      containers:
+        - resources:
+            limits:
+              cpu: 600m
+              memory: 900Mi
+            requests:
+              cpu: 400m
+              memory: 700Mi
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: 15021
+              scheme: HTTP
+            initialDelaySeconds: 1
+            timeoutSeconds: 5
+            periodSeconds: 2
+            successThreshold: 1
+            failureThreshold: 30
+          terminationMessagePath: /dev/termination-log
+          name: istio-proxy
+          env:
+            - name: JWT_POLICY
+              value: first-party-jwt
+            - name: PILOT_CERT_PROVIDER
+              value: istiod
+            - name: CA_ADDR
+              value: 'ist.ci01994970-idevgen-synapse-control-panel.svc:15012'
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: INSTANCE_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.hostIP
+            - name: SERVICE_ACCOUNT
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.serviceAccountName
+            - name: CANONICAL_SERVICE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: 'metadata.labels[''service.istio.io/canonical-name'']'
+            - name: CANONICAL_REVISION
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: 'metadata.labels[''service.istio.io/canonical-revision'']'
+            - name: ISTIO_META_WORKLOAD_NAME
+              value: egressgateway-ci01994970-idevgen-synapse-federal
+            - name: ISTIO_META_OWNER
+              value: >-
+                kubernetes://apis/apps/v1/namespaces/ci01994970-idevgen-synapse-federal/deployments/ingressgateway-ci01994970-idevgen-synapse-federal
+            - name: ISTIO_META_MESH_ID
+              value: cluster.local
+            - name: PROXY_CONFIG
+              value: >
+                {"discoveryAddress":"ist.ci01994970-idevgen-synapse-control-panel.svc:15012","tracing":{"zipkin":{"address":"jaeger-collector.ci01994970-idevgen-synapse-control-panel.svc:9411"},"tlsSettings":{"subjectAltNames":[]}},"proxyMetadata":{"DNS_AGENT":""}}
+            - name: ISTIO_META_ROUTER_MODE
+              value: sni-dnat
+            - name: ISTIO_META_CLUSTER_ID
+              value: Kubernetes
+          ports:
+            - name: http-envoy-prom
+              containerPort: 15090
+              protocol: TCP
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: istio-envoy
+              mountPath: /etc/istio/proxy
+            - name: istiod-ca-cert
+              mountPath: /var/run/secrets/istio
+            - name: podinfo
+              mountPath: /etc/istio/pod
+            - name: egressgateway-certs
+              readOnly: true
+              mountPath: /etc/istio/egressgateway-certs
+            - name: egressgateway-ca-certs
+              readOnly: true
+              mountPath: /etc/istio/egressgateway-ca-certs
+          terminationMessagePolicy: File
+          image: >-
+            registry.redhat.io/openshift-service-mesh/proxyv2-rhel8@sha256:03ba7a4bed6122c842ac0aeca626be7e6f3ec2106acee2ffda017c8cbf36e41b
+          args:
+            - proxy
+            - router
+            - '--domain'
+            - $(POD_NAMESPACE).svc.cluster.local
+            - '--proxyLogLevel=warning'
+            - '--proxyComponentLogLevel=misc:error'
+            - '--log_output_level=default:info'
+            - '--serviceCluster'
+            - egressgateway-ci01994970-idevgen-synapse-federal.$(POD_NAMESPACE)
+            - '--trust-domain=cluster.local'
+      serviceAccount: default
+      volumes:
+        - name: istio-envoy
+          emptyDir: {}
+        - name: istiod-ca-cert
+          configMap:
+            name: istio-ca-root-cert
+            defaultMode: 420
+        - name: egressgateway-certs
+          secret:
+            secretName: istio-egressgateway-certs
+            defaultMode: 420
+            optional: true
+        - name: egressgateway-ca-certs
+          secret:
+            secretName: istio-egressgateway-ca-certs
+            defaultMode: 420
+            optional: true
+        - name: podinfo
+          downwardAPI:
+            items:
+              - path: labels
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.labels
+              - path: annotations
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.annotations
+            defaultMode: 256
+      dnsPolicy: ClusterFirst
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    template: myapp
+  name: egressgateway-svc
+spec:
+  ports:
+    - name: http-8080
+      port: 8080
+  selector:
+    app: egressgateway-ci01994970-idevgen-synapse-federal
+    istio: egressgateway-ci01994970-idevgen-synapse-federal
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: myapp-ingress-vs
+spec:
+  exportTo:
+    - .
+  gateways:
+    - ingressgateway-gw
+  hosts:
+    - '*'
+  http:
+    - route:
+        - destination:
+            host: egressgateway-svc
+            port:
+              number: 8080
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: myapp-external-host
+spec:
+  exportTo:
+    - .
+  hosts:
+    - myapp.ru
+  ports:
+    - name: http
+      number: 8080
+      protocol: HTTP
+  resolution: DNS
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: myapp-egress-vs
+spec:
+  exportTo:
+    - .
+  gateways:
+    - myapp-egressgateway-gw
+  hosts:
+    - '*'
+  http:
+    - match:
+        - gateways:
+            - myapp-egressgateway-gw
+          port: 8080
+      rewrite:
+        authority: myapp.ru
+      route:
+        - destination:
+            host: myapp.ru
+            port:
+              number: 8080
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  labels:
+    template: myapp
+  name: myapp-egressgateway-gw
+spec:
+  selector:
+    istio: egressgateway-ci01994970-idevgen-synapse-federal
+  servers:
+    - hosts:
+        - '*'
+      port:
+        name: http-8080
+        number: 8080
+        protocol: HTTP
+---
